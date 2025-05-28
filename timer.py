@@ -98,16 +98,33 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             media=InputMediaPhoto(media=timer_img, caption="⏱ لطفاً مدت زمان تایمر را انتخاب کنید:"),
             reply_markup=get_main_menu()
         )
+    elif data == "show_music":
+        await show_music_from_txt(update, context)
 
-# سایر توابع بدون تغییر باقی می‌مانند ... (کد موجود حفظ شود)
+# تابع ساخت منوی اصلی
+def get_main_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🎵 موزیک", callback_data="show_music")]
+    ])
+
+# تابع شروع تایمر (تعریف شده برای جلوگیری از ارور)
+async def start_timer_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⏱ تایمر آماده است. لطفاً مدت زمان را انتخاب کنید.")
+
+# هندلر اصلی دکمه‌ها
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await callback_router(update, context)
+
+# هندلر پیام متنی
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("پیام متنی دریافت شد.")
 
 # داخل main اضافه کن:
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("timer", start_timer_command))
     app.add_handler(CallbackQueryHandler(button_handler))
-    app.add_handler(CallbackQueryHandler(show_music_from_txt, pattern="^show_music$"))
-    app.add_handler(CallbackQueryHandler(lambda update, context: asyncio.create_task(callback_router(update, context)), pattern="^music_\\d+$"))
+    app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
 
     print("✅ ربات تایمر در حال اجراست...")
