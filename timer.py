@@ -1,5 +1,6 @@
 import asyncio
 import os
+import yt_dlp
 from io import BytesIO
 from PIL import Image, ImageEnhance, ImageFilter
 from telegram import (
@@ -19,6 +20,70 @@ from telegram.ext import (
 )
 
 TOKEN = os.getenv("BOT_TOKEN")
+
+# تابع پخش موزیک از YouTube
+async def download_and_play_youtube_music(query: str, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': 'temp_audio.%(ext)s',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'noplaylist': True,
+        'quiet': True,
+    }
+    
+    await context.bot.send_message(chat_id=chat_id, text=f"🔍 در حال جستجوی '{query}' در YouTube...")
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"ytsearch1:{query}", download=True)
+            audio_file = ydl.prepare_filename(info['entries'][0]).replace(".webm", ".mp3").replace(".m4a", ".mp3")
+
+        with open(audio_file, 'rb') as f:
+            await context.bot.send_audio(chat_id=chat_id, audio=f, caption=f"🎶 پخش: {query}")
+
+        os.remove(audio_file)
+
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"❌ خطا در دانلود موزیک: {e}")
+# دکمه‌ها از music.txt خوانده شود
+async def show_music_from_txt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        with open("music.txt", "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip() and "|" in line]
+    except FileNotFoundError:
+        await query.message.edit_caption("❌ فایل music.txt پیدا نشد.")
+        return
+
+    context.user_data["music_list"] = lines
+
+    buttons = []
+    for i, line in enumerate(lines):
+        title, _ = line.split("|", 1)
+        buttons.append([InlineKeyboardButton(title, callback_data=f"music_{i}")])
+
+    buttons.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_menu")])
+
+    await query.message.edit_caption(
+        caption="🎵 لطفاً موزیکی را انتخاب کنید:",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+# پردازش دکمه‌های موزیک txt
+async def handle_music_selection(index: int, context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    music_list = context.user_data.get("music_list", [])
+    if 0 <= index < len(music_list):
+        _, query = map(str.strip, music_list[index].split("|", 1))
+        await download_and_play_youtube_music(query, context, chat_id)
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="❌ موزیک انتخابی معتبر نیست.")
+
 
 def resize_image(path, size=(128, 128)):
     try:
@@ -315,46 +380,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_photo(chat_id=chat.id, photo=photo, caption="🌙 شب")
         except FileNotFoundError:
             await query.message.reply_text("❌ فایل shab.png پیدا نشد.")
-    elif data == "show_music":
-        music_folder = "music"
-        music_files = sorted([
-            f for f in os.listdir(music_folder)
-            if f.lower().endswith(".mp3")
-        ])
-    
-        if not music_files:
-            await query.message.edit_caption("⚠️ هیچ موزیکی در پوشه 'music/' یافت نشد.")
-            return
-    
-        buttons, row = [], []
-        for i, filename in enumerate(music_files):
-            display_name = os.path.splitext(filename)[0]
-            row.append(InlineKeyboardButton(display_name, callback_data=f"musicplay_{filename}"))
-            if (i + 1) % 2 == 0:
-                buttons.append(row)
-                row = []
-        if row:
-            buttons.append(row)
-    
-        buttons.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_menu")])
-    
-        await query.message.edit_caption(
-            caption="🎵 لطفاً موزیکی برای پخش در voice انتخاب کن:",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-    elif data.startswith("musicplay_"):
-        filename = data.replace("musicplay_", "")
-        await context.bot.send_message(chat_id=chat.id, text=f"پخش {filename}")
-
-
-    elif data.startswith("music_"):
-        index = int(data.split("_")[1])
-        music_list = context.user_data.get("music_list", [])
-        if 0 <= index < len(music_list):
-            _, command = map(str.strip, music_list[index].split("|", 1))
-            await context.bot.send_message(chat_id=chat.id, text=f"{command}")
-        else:
-            await query.message.reply_text("❌ موزیک انتخابی معتبر نیست.")
     
     if data.startswith("challenge_toggle_"):
         index = int(data.split("_")[2])
