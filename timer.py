@@ -342,6 +342,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption="🎵 لطفاً موزیکی برای پخش در voice انتخاب کن:",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
+    elif data.startswith("musicplay_"):
+        filename = data.replace("musicplay_", "")
+        await context.bot.send_message(chat_id=chat.id, text=f"پخش {filename}")
 
 
     elif data.startswith("music_"):
