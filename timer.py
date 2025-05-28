@@ -315,36 +315,34 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_photo(chat_id=chat.id, photo=photo, caption="🌙 شب")
         except FileNotFoundError:
             await query.message.reply_text("❌ فایل shab.png پیدا نشد.")
-    
     elif data == "show_music":
-        try:
-            with open("music.txt", "r", encoding="utf-8") as file:
-                lines = [line.strip() for line in file if "|" in line]
-
-            if not lines:
-                await query.message.edit_caption("⚠️ هیچ موزیکی در فایل 'music.txt' یافت نشد.")
-                return
-
-            buttons, row = [], []
-            for i, line in enumerate(lines):
-                title, _ = map(str.strip, line.split("|", 1))
-                row.append(InlineKeyboardButton(title, callback_data=f"music_{i}"))
-                if (i + 1) % 5 == 0:
-                    buttons.append(row)
-                    row = []
-            if row:
+        music_folder = "music"
+        music_files = sorted([
+            f for f in os.listdir(music_folder)
+            if f.lower().endswith(".mp3")
+        ])
+    
+        if not music_files:
+            await query.message.edit_caption("⚠️ هیچ موزیکی در پوشه 'music/' یافت نشد.")
+            return
+    
+        buttons, row = [], []
+        for i, filename in enumerate(music_files):
+            display_name = os.path.splitext(filename)[0]
+            row.append(InlineKeyboardButton(display_name, callback_data=f"musicplay_{filename}"))
+            if (i + 1) % 2 == 0:
                 buttons.append(row)
+                row = []
+        if row:
+            buttons.append(row)
+    
+        buttons.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_menu")])
+    
+        await query.message.edit_caption(
+            caption="🎵 لطفاً موزیکی برای پخش در voice انتخاب کن:",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
-            buttons.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_to_menu")])
-            context.user_data["music_list"] = lines
-
-            await query.message.edit_caption(
-                caption="🎵 لطفاً یک موزیک را انتخاب کنید:",
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
-
-        except FileNotFoundError:
-            await query.message.edit_caption("❌ فایل 'music.txt' یافت نشد.")
 
     elif data.startswith("music_"):
         index = int(data.split("_")[1])
